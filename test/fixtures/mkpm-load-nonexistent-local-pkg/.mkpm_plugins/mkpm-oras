@@ -1,0 +1,47 @@
+# See oras https://oras.land/ and https://www.kenmuse.com/blog/universal-packages-on-github-with-oras/
+_mkpm_plugin_oras_artifact_type := application/vnd.mkpm.config+gzip
+_mkpm_plugin_oras_version := 1.3.2
+_mkpm_plugin_oras_installed := $(if $(shell command -v oras),t)
+
+define _mkpm_plugin_oras_registry_host
+$(word 1,$(subst /,$(call mkpm_registry)))
+endef
+
+define _mkpm_plugin_oras_install
+$(info Installing oras $(_mkpm_plugin_oras_version)...)
+curl -LO "https://github.com/oras-project/oras/releases/download/v$(or $(1),$(_mkpm_plugin_oras_version))/oras_$(or $(1),$(_mkpm_plugin_oras_version))_linux_amd64.tar.gz"
+mkdir -p oras-install/
+tar -zxf oras_$(or $(1),$(_mkpm_plugin_oras_version))_*.tar.gz -C oras-install/
+sudo mv oras-install/oras /usr/local/bin/
+rm -rf oras_$(or $(1),$(_mkpm_plugin_oras_version))_*.tar.gz oras-install/
+$(call _mkpm_plugins_oras_login)
+endef
+
+define _mkpm_plugin_oras_login
+$(info When using Github (ghcr.io), use your PAT (Personal Access Token) as your password)
+oras login $(call _mkpm_plugin_oras_registry_host) -u github
+endef
+
+define _mkpm_plugin_oras_logout
+oras logout $(call _mkpm_plugin_oras_registry_host)
+endef
+
+define mkpm_publish
+$(info Publishing package $(2):$(3)...)
+$(if $(_mkpm_plugin_oras_installed),,$(call _mkpm_plugin_oras_install))
+oras push $(call mkpm_registry)/$(2):$(3) --disable-path-validation --artifact-type $(call _mkpm_plugin_oras_artifact_type) $(1)
+endef
+
+# define mkpm_download
+# $(quiet)echo "Downloading package $(call _mkpm_dep_name,$(1))$(if $(call _mkpm_dep_version,$(1)),:$(call _mkpm_dep_version,$(1)))..." && oras pull $(call mkpm_registry)/$(subst @,:,$(1))
+# endef
+
+define mkpm_download
+$(quiet)echo "Downloading package $(call _mkpm_dep_name,$(1))$(if $(call _mkpm_dep_version,$(1)),:$(call _mkpm_dep_version,$(1)))..." && \
+oras pull $(call mkpm_registry)/$(call _mkpm_dep_name,$(1)):$(or $(call _mkpm_dep_version,$(1)),latest) 2>/tmp/mkpm-oras-err.$$$$ || { \
+  echo "mkpm: failed to fetch '$(call _mkpm_dep_name,$(1))' from $(call mkpm_registry) (package missing or registry unreachable)" >&2; \
+  sed 's/^/  | /' /tmp/mkpm-oras-err.$$$$ >&2; \
+  rm -f /tmp/mkpm-oras-err.$$$$; \
+  exit 1; \
+} && rm -f /tmp/mkpm-oras-err.$$$$
+endef

@@ -1,0 +1,3 @@
+reg=ghcr.io/codextremist
+mkpm_dir=../../..
+ws=./pkgs
