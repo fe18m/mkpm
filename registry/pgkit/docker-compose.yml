@@ -1,0 +1,111 @@
+# Use the prefix x- as a top-level element to modularize configurations that you want to reuse. 
+# Compose ignores any fields that start with x-, this is the sole exception where Compose silently ignores unrecognized fields.
+x-base: &base
+  build:
+    context: .
+    tags:
+      - ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_VERSION:-latest}
+      - ${DOCKER_IMAGE_NAME}:latest
+  image: ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_VERSION:-latest}
+  networks:
+    local_dev:
+      aliases:
+        - ${POSTGRES_HOST}
+  restart: unless-stopped
+  env_file:
+    - ${DOCKER_COMPOSE_DIR}/.env
+    - ${PROJECT_DIR}/.env
+  environment:
+    # Pin the data path explicitly. The PG18 official image changed its
+    # default PGDATA layout; setting it here keeps the volume mount stable.
+    PGDATA: /var/lib/postgresql/data
+  volumes:
+    - pgdata:/var/lib/postgresql/data
+    # *.sql / *.sh here run ONCE, only when the data directory is empty.
+    - ./init:/docker-entrypoint-initdb.d:ro
+  # pg_cron MUST be in shared_preload_libraries, and its metadata
+  # (the cron.job table) lives in the database named by cron.database_name.
+  # These args are also applied to the bootstrap server during first init,
+  # so CREATE EXTENSION pg_cron in ./init works without a manual restart.
+  # command:
+  #   - postgres
+  #   - -c
+  #   - shared_preload_libraries=pg_cron
+  #   - -c
+  #   - cron.database_name=appdb
+
+# https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html 
+x-pgadmin-base: &pgadmin-base
+  image: dpage/pgadmin4
+  env_file:
+    - ${DOCKER_COMPOSE_DIR}/.env
+    - ${PROJECT_DIR}/.env
+  volumes:
+    - ${PROJECT_DIR}/pgadmin/servers.${ENV}.json:/pgadmin4/servers.json
+    - ${PROJECT_DIR}/.pgpass:/pgadmin4/.pgpass
+
+services:
+  postgres:
+    <<: *base
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # *.sql / *.sh here run ONCE, only when the data directory is empty.
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+  
+  # Shell
+  shell:
+    <<: *base
+    profiles: ["shell"]
+    entrypoint: ["bash"]
+
+  psql:
+    <<: *base
+    profiles: ["tools"]
+    entrypoint: ["psql"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  pg_dump:
+    <<: *base
+    profiles: ["tools"]
+    entrypoint: ["pg_dump"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - ./backups:/backups
+  
+  pg_restore:
+    <<: *base
+    profiles: ["tools"]
+    entrypoint: ["pg_restore"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  pgadmin:
+    <<: *pgadmin-base
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 80
+
+volumes:
+  pgdata:
+
+networks:
+  local_dev:
+    external: true

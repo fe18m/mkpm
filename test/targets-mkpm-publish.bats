@@ -23,7 +23,7 @@ teardown() {
 }
 
 # @test "mkpm-publish without plugins" {
-#   printf 'reg=ghcr.io/codextremist' > test/fixtures/.mkpmrc
+#   printf 'reg=ghcr.io/fe18m' > test/fixtures/.mkpmrc
 #   printf 'name=pkg\nversion=1.0.0\n' > test/fixtures/mkpkg
 #   make_fixture Makefile -- mkpm-publish
 #   assert_failure

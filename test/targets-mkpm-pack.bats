@@ -35,8 +35,18 @@ teardown() {
   assert_file_exists "$BATS_TEST_TMPDIR/custom.mk"
 }
 
-@test "mkpm-pack with defined assets" {
-  printf 'name=pkg\nversion=1.1.1\nassets=file.example' > "$FIXTURE/mkpkg"
+@test "mkpm-pack with defined templates" {
+  printf 'name=pkg\nversion=1.1.1\ntemplates=file.example' > "$FIXTURE/mkpkg"
+  printf 'hello' > "$FIXTURE/file.example"
+  run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURE" mkpm-pack
+  assert_success
+  assert_file_exists "$FIXTURE/pkg@1.1.1.tgz"
+  run tar -xvf "$FIXTURE/pkg@1.1.1.tgz" -C "$BATS_TEST_TMPDIR"
+  assert_file_exists "$BATS_TEST_TMPDIR/file.example"
+}
+
+@test "mkpm-pack with defined files" {
+  printf 'name=pkg\nversion=1.1.1\nfiles=file.example' > "$FIXTURE/mkpkg"
   printf 'hello' > "$FIXTURE/file.example"
   run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURE" mkpm-pack
   assert_success

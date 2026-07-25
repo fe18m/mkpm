@@ -1,4 +1,3 @@
-## mkpm bootstrap
 ifndef mkpm_included
 ifeq ($(filter grouped-target,$(.FEATURES)),)
 $(error mkpm requires GNU Make >= 4.3 (found $(MAKE_VERSION)). On macOS: brew install make, then use 'gmake')
@@ -9,12 +8,13 @@ include $(if $(filter /%,$(mkpm_dir)),$(mkpm_dir),$(abspath $(mkpm_dir)))/Makefi
 else
 mkpm: REMOTE ?= https://mkpm.io/Makefile
 mkpm:
-	@curl -fsSL $(REMOTE) -o $@ || { echo "Failed to download $@ from $(REMOTE)" >&2; exit 1; }
+	@curl -fsSL $(REMOTE) -o $@ || { \
+	  echo "Failed to download $@ from $(REMOTE)" >&2; \
+	  exit 1; \
+	}
 include mkpm
 endif
 endif
-## /mkpm bootstrap
 
-$(call mkpm_help,hello-world-b,Calls hello-world-b as defined in pkg b)
-hello-world-b:
-	@echo "Hello World from package B"
+$(call mkpm_load,monorepo)
+$(call $(@monorepo)_set_dirs,monorepo docker docker-compose pgkit)

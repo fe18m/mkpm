@@ -15,6 +15,22 @@ endif
 endif
 ## /mkpm bootstrap
 
-$(call mkpm_help,hello-world-b,Calls hello-world-b as defined in pkg b)
-hello-world-b:
-	@echo "Hello World from package B"
+define @monorepo_submake
+$(MAKE) -C ./$(1) $(2)
+endef
+
+FORCE:
+.PHONY: FORCE
+
+define @monorepo_set_dirs
+$(if $(@monorepo_dirs),$(error @monorepo_dirs already set: @monorepo_dirs = $(@monorepo_dirs)))$(eval
+@monorepo_dirs := $(strip $(1))
+$$(addsuffix /%,$(strip $(1))): FORCE
+	$(quiet)$$(call $$(@)_submake,$$(@D),$$(notdir $$@))
+)
+endef
+
+# Global help hook
+define help_hook
+$(quiet)$(foreach dir,$(@monorepo_dirs),$(call @monorepo_submake,$(dir),help) &&) true
+endef

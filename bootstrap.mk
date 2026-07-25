@@ -8,7 +8,7 @@ mkpm_dir := $$(subst mkpm_dir=,,$$(filter mkpm_dir=%,$$(or $$(file < .mkpmrc.loc
 ifneq ($$(mkpm_dir),)
 include $$(if $$(filter /%,$$(mkpm_dir)),$$(mkpm_dir),$$(abspath $$(mkpm_dir)))/Makefile
 else
-mkpm: REMOTE ?= https://raw.githubusercontent.com/codextremist/mkpm/refs/heads/master/Makefile
+mkpm: REMOTE ?= https://mkpm.io/Makefile
 mkpm:
 	@curl -fsSL $$(REMOTE) -o $$@ || { \
 	  echo "Failed to download $$@ from $$(REMOTE)" >&2; \

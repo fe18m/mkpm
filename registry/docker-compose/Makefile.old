@@ -1,0 +1,133 @@
+mkpm_docker_makefile_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
+## mkpm bootstrap
+mkpm_path := $(subst mkpm_path=,,$(filter mkpm_path=%,$(strip $(file < .mkpmrc))))
+ifndef mkpm_included
+mkpm: MKPM_REMOTE ?= https://raw.githubusercontent.com/codextremist/mkpm/refs/heads/master/mkpm
+mkpm:
+	$(if $(mkpm_path),ln -sfn $(mkpm_path) $@,curl -sL $(MKPM_REMOTE) > $@)
+include mkpm
+endif
+## /mkpm bootstrap
+
+$(call mkpm_load,mkpm-help)
+
+# # ifndef MKPM_DIR
+# # 	@curl -sL https://raw.githubusercontent.com/codextremist/mkpm/refs/heads/master/mkpm > $@
+# # else
+# 	@ln -sfn $(MKPM_DIR)/mkpm $@
+#endif
+#include $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/mkpm.init
+## /mkpm bootstrap
+
+export DOCKER_IMAGE_NAME
+export DOCKER_COMPOSE_DIR
+
+DOCKER_COMPOSE_FILE ?= $(or $(DOCKER_COMPOSE_DIR),$(CURDIR))/docker-compose.yml
+DOCKERFILE ?= $(or $(DOCKERFILE_DIR),$(CURDIR))/Dockerfile
+
+# All files that this image depends on
+DOCKER_IMAGE_DEPENDS_ON ?=
+
+DOCKER_NETWORK := docker network
+DOCKER_COMPOSE := docker compose -f $(DOCKER_COMPOSE_FILE)
+DOCKER := docker run --rm
+
+docker_image_build := .docker-image-build
+
+$(docker_image_build): $(DOCKERFILE) $(DOCKER_IMAGE_DEPENDS_ON)
+	cat $^ | sha256sum | cut -c1-7 > $@
+	DOCKER_IMAGE_VERSION="$$(cat $@)" $(DOCKER_COMPOSE) build
+
+docker-network-create: ## Create docker network
+	@$(DOCKER_NETWORK) create $(ARGS) 2>/dev/null || true
+
+docker-network-rm: ## Remove docker network
+	@$(DOCKER_NETWORK) network rm $(ARGS)
+
+# Docker Compose Build
+docker-compose-build: $(docker_image_build)
+	DOCKER_IMAGE_VERSION="$$(cat $<)" $(DOCKER_COMPOSE) build
+
+# Docker Compose Push
+docker-compose-push: ARGS :=
+docker-compose-push-include-deps: ARGS := --include-deps
+docker-compose-push docker-compose-push-include-deps: $(__docker_image_build_file)
+	$(DOCKER_COMPOSE) push $(ARGS)
+
+# Docker Compose Pull
+docker-compose-pull: ARGS :=
+docker-compose-pull-include-deps: ARGS := --include-deps
+docker-compose-pull docker-compose-pull-include-deps:
+	$(DOCKER_COMPOSE) pull $(ARGS)
+
+# Docker Compose Up
+docker-compose-up: ARGS := 
+docker-compose-up-d: ARGS := -d 
+docker-compose-up-d: ARGS := -d --remove-orphans
+docker-compose-up docker-compose-up-d: docker-network-create $(__docker_image_build_file) ## Run: docker compose up
+	$(DOCKER_COMPOSE) up $(ARGS)
+
+# Docker Compose Down
+docker-compose-down: ARGS :=
+docker-compose-down-v: ARGS := -v
+
+docker-compose-down-rmi-local: ARGS := --rmi local
+docker-compose-down-rmi-local: clean
+
+docker-compose-down-rmi-all: ARGS := --rmi all
+docker-compose-down-rmi-all: clean
+
+docker-compose-down-v-rmi-all: ARGS := -v --rmi all
+docker-compose-down-v-rmi-all: clean
+
+docker-compose-down-remove-orphans: ARGS := --remove-orphans
+
+docker-compose-down docker-compose-down-v docker-compose-down-rmi-local docker-compose-down-rmi-all docker-compose-down-remove-orphans:
+	$(DOCKER_COMPOSE) down $(ARGS)
+
+# Docker Compose Ps
+docker-compose-ps: ARGS :=
+docker-compose-ps-a: ARGS := --all
+docker-compose-ps-filter: ARGS := --filter $(ARGS)
+
+docker-compose-ps docker-compose-ps-a docker-compose-ps-filter:	
+	$(DOCKER_COMPOSE) ps $(ARGS)
+
+# Docker Compose Run
+docker-compose-run: 
+	$(DOCKER_COMPOSE) run $(ARGS)
+
+docker-compose-run-rm:
+docker-compose-run-rm:
+	$(DOCKER_COMPOSE) run --rm $(ARGS)
+
+# Docker Compose Image
+docker-compose-images:
+	$(DOCKER_COMPOSE) images
+
+# Docker Compose Logs
+docker-compose-logs: ARGS := $(ARGS)
+docker-compose-logs-f: ARGS := -f $(ARGS)
+docker-compose-logs-until: ARGS := --until=$(ARGS)
+docker-compose-logs docker-compose-logs-f docker-compose-logs-until:
+	$(DOCKER_COMPOSE) logs $(ARGS)
+
+# Docker Images
+docker-images-format: ARGS := --format $(or $(ARGS),'{{.Repository}}:{{.Tag}}')
+docker-images-format:
+	docker images $(ARGS)
+
+docker-images-format-f: ARGS_0 := --format $(or $(ARGS_0),'{{.Repository}}:{{.Tag}}')
+docker-images-format-f: ARGS_1 := -f $(or $(ARGS_1), "reference=$(DOCKER_IMAGE_NAME):*") # Default Value
+docker-images-format-f:
+	docker images $(ARGS_0) $(ARGS_1)
+
+docker-images-rm: ARGS := 
+docker-images-rm-f: ARGS := -f $(ARGS)
+docker-images-rm docker-images-rm-f:	
+	docker image rm $(ARGS)
+
+clean:
+	@rm -f $(__docker_image_build_file) $(__docker_image_deps_file)
+

@@ -34,7 +34,7 @@ define mkpm_publish
 $(info Publishing package $(2):$(3)...)
 $(if $(_mkpm_plugin_oras_installed),,$(call _mkpm_plugin_oras_install))
 $(if $(CI),$(call _mkpm_plugin_oras_login))
-oras push $(call mkpm_registry)/$(2):$(3) --disable-path-validation --artifact-type $(call _mkpm_plugin_oras_artifact_type) $(1)
+oras push $(call mkpm_registry)/$(2):$(3)$(if $(filter-out latest,$(3)),$(comma)latest) --disable-path-validation --artifact-type $(call _mkpm_plugin_oras_artifact_type) $(1)
 endef
 
 # Function override
@@ -52,7 +52,7 @@ ifeq ($(_mkpm_target_ns),)
 $(call mkpm_help,mkpm-plugin-oras-install,Install ORAS)
 .PHONY: mkpm-plugin-oras-install
 mkpm-plugin-oras-install:
-	$(quiet)$(if $(_mkpm_plugin_oras_installed),printf "\033]0;93moras already installed\033[0m\n",$(call _mkpm_plugin_oras_install))
+	$(quiet)$(if $(_mkpm_plugin_oras_installed),printf "\033[93mORAS already installed\033[0m\n",$(call _mkpm_plugin_oras_install))
 
 $(call mkpm_help,mkpm-plugin-oras-login,Log in to registry)
 .PHONY: mkpm-plugin-oras-login

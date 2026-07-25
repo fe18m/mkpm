@@ -68,8 +68,12 @@ define _mkpm_pkg_version
 $(or $(call _mkpm_mkpkg_get,version,$(1)),latest)
 endef
 
-define _mkpm_pkg_assets
-$(subst $(comma), ,$(call _mkpm_mkpkg_get,assets,$(1)))
+define _mkpm_pkg_templates
+$(subst $(comma), ,$(call _mkpm_mkpkg_get,templates,$(1)))
+endef
+
+define _mkpm_pkg_files
+$(subst $(comma), ,$(call _mkpm_mkpkg_get,files,$(1)))
 endef
 
 define _mkpm_pkg_main
@@ -124,11 +128,11 @@ $(call _mkpm_dep_name,$(1))$(if $(call _mkpm_dep_version,$(1)),@$(call _mkpm_dep
 endef
 
 define _mkpm_pack_files
-tar -czf $(call _mkpm_pkg).tgz -C $(CURDIR) $(strip $(call _mkpm_pkg_main) $(call _mkpm_pkg_assets))
+tar -czf $(call _mkpm_pkg).tgz -C $(CURDIR) $(strip $(call _mkpm_pkg_main) $(call _mkpm_pkg_templates) $(call _mkpm_pkg_files))
 endef
 
 define _mkpm_unpack_files
-tar -xf $(1).tgz -C $(or $(2),$(_mkpm_pkgs_dir))/$(1)
+f=$$(ls -1 $(call _mkpm_dep_name,$(1))@*.tgz 2>/dev/null | head -n1); tar -xf "$${f:-$(1).tgz}" -C $(or $(2),$(_mkpm_pkgs_dir))/$(1)
 endef
 
 define _mkpm_semver_major
@@ -143,7 +147,7 @@ define _mkpm_semver_patch
 $(word 3,$(subst ., ,$(call _mkpm_pkg_version)))
 endef
 
-define _mkpm_copy_local_pkg_assets
+define _mkpm_copy_local_pkg_templates
 $(if $(strip $(2)),$(shell for f in $(2); do \
   if [ ! -e "$(CURDIR)/$$f" ]; then \
     mkdir -p "$(CURDIR)/$$(dirname "$$f")"; \
@@ -156,30 +160,23 @@ define _mkpm_computed_local_pkg_dir
 $(join $(_mkpm_ws_dir),/$(call _mkpm_dep_name,$(1)))
 endef
 
-#$(if $(call mkpm_pkg_assets),cp $(call mkpm_pkg_assets) $(CURDIR))
-# define _mkpm_load_local_pkg
-# $(eval include $(call _mkpm_computed_local_pkg_dir,$(1))/Makefile)
-# _mkpm_loaded_pkgs += $(call _mkpm_dep_name,$(1))
-# $(eval $(call _mkpm_dep_name,$(1))_ns := $(_ns))
-# $(call _mkpm_copy_local_pkg_assets,$(call _mkpm_computed_local_pkg_dir,$(1)),$(call _mkpm_pkg_assets,$(call _mkpm_computed_local_pkg_dir,$(1))))
-# endef
 define _mkpm_load_local_pkg
 $(eval include $(call _mkpm_computed_local_pkg_dir,$(1))/Makefile)
 _mkpm_loaded_pkgs += $(call _mkpm_dep_name,$(1))
-$(eval @$(call _mkpm_dep_name,$(1)) := $(@))
-$(eval undefine $(@))
-$(call _mkpm_copy_local_pkg_assets,$(call _mkpm_computed_local_pkg_dir,$(1)),$(call _mkpm_pkg_assets,$(call _mkpm_computed_local_pkg_dir,$(1))))
+$(eval @$(call _mkpm_dep_name,$(1)) := @$(call _mkpm_dep_name,$(1)))
+$(call _mkpm_copy_local_pkg_templates,$(call _mkpm_computed_local_pkg_dir,$(1)),$(call _mkpm_pkg_templates,$(call _mkpm_computed_local_pkg_dir,$(1))))
 endef
 
 define _mkpm_load_remote_pkg
 include $(_mkpm_pkgs_dir)/$(1)/Makefile
 _mkpm_loaded_pkgs += $(1)
-$(_mkpm_pkgs_dir)/$(1)/Makefile:
+$(eval @$(call _mkpm_dep_name,$(1)) := @$(call _mkpm_dep_name,$(1)))
+$(_mkpm_pkgs_dir)/$(1)/Makefile: | $(_mkpm_default_plugins) $(_mkpm_custom_plugins)
 	$(quiet)set -e
 	$(quiet)$$(call mkpm_download,$(1))
 	$(quiet)mkdir -p $(_mkpm_pkgs_dir)/$(1)
 	$(quiet)$$(call _mkpm_unpack_files,$(1))
-	$(quiet)rm -f $(1).tgz
+	$(quiet)rm -f $(call _mkpm_dep_name,$(1))@*.tgz $(1).tgz
 endef
 
 define _mkpm_is_pkg_loaded
@@ -199,15 +196,15 @@ endef
 ## mkpm_publish and mkpm_download must be implemented by a publishing plugin
 # $(1) = pack file, $(2) = pkg name,  $(3) = pkg version
 define mkpm_registry
-$(or $(call _mkpm_mkpmrc_get,reg),$(MKPM_REGISTRY),$(error $(0) is not implemented.$(newline)$(space)$(space)1. Enable a plugin in .mkpmrc: plugins=mkpm-oras$(space)2. Or define $(0) yourself))
+$(or $(call _mkpm_mkpmrc_get,reg),$(MKPM_REGISTRY),$(error registry is missing.$(newline)$(space)$(space) Define reg=<registry_url> in .mkpmrc or set MKPM_REGISTRY env var))
 endef
 
 define mkpm_registry_token
-$(or $(call _mkpm_mkpmrc_get,reg_token),$(MKPM_REGISTRY_TOKEN),$(error $(0) is not implemented.$(newline)$(space)$(space)1. Enable a plugin in .mkpmrc: plugins=mkpm-oras$(space)2. Or define $(0) yourself))
+$(or $(call _mkpm_mkpmrc_get,reg_token),$(MKPM_REGISTRY_TOKEN),$(error registry token is missing.$(newline)$(space)$(space) Define reg_token=<registry_token> in .mkpmrc or set MKPM_REGISTRY_TOKEN env var))
 endef
 
 define mkpm_registry_user
-$(or $(call _mkpm_mkpmrc_get,reg_user),$(MKPM_REGISTRY_USER),github,$(error $(0) is not implemented.$(newline)$(space)$(space)1. Enable a plugin in .mkpmrc: plugins=mkpm-oras$(space)2. Or define $(0) yourself))
+$(or $(call _mkpm_mkpmrc_get,reg_user),$(MKPM_REGISTRY_USER),github,$(error registry user is missing.$(newline)$(space)$(space) Define reg_user=<registry_user> in .mkpmrc or set MKPM_REGISTRY_USER env var))
 endef
 
 define mkpm_publish
@@ -234,6 +231,12 @@ endef
 define _mkpm_custom_plugins 
 $(addprefix .mkpm_plugins/,$(filter-out +%,$(call _mkpm_plugins)))
 endef
+
+define _mkpm_ensure_plugin_fetched
+$(if $(wildcard $(1)),,$(shell mkdir -p $(dir $(1)) 2>/dev/null; curl -fsSL https://raw.githubusercontent.com/codextremist/mkpm/refs/heads/master/plugins/$(notdir $(1)) -o $(1) 2>/dev/null || rm -f $(1)))
+endef
+
+$(foreach _mkpm_p,$(filter .mkpm_plugins/%,$(_mkpm_default_plugins) $(_mkpm_custom_plugins)),$(call _mkpm_ensure_plugin_fetched,$(_mkpm_p)))
 
 -include $(_mkpm_default_plugins)
 -include $(_mkpm_custom_plugins)
@@ -333,5 +336,6 @@ mkpm-init:
 	echo "Initialized package '$$pkg'"
 
 -include $(_mkpm_this)/introspect.mk
+-include $(_mkpm_this)/local/Makefile
 
 mkpm_included := true

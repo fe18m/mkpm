@@ -1,0 +1,4 @@
+name=pkg-a
+version=0.0.1
+templates=file-a.txt,some-dir/file-b.txt
+files=file-c.txt

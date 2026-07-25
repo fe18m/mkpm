@@ -17,14 +17,23 @@ setup() {
   assert_output "Hello World"
 }
 
-@test "when assets are declared, copy each asset to CURDIR when loading local packages" {
-  CURDIR="$FIXTURES/mkpm-load-local-pkg-with-assets"
-  run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURES/mkpm-load-local-pkg-with-assets" pkg-a-target
+@test "when templates are declared, copy each template to CURDIR when loading local packages" {
+  CURDIR="$FIXTURES/mkpm-load-local-pkg-with-templates"
+  run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURES/mkpm-load-local-pkg-with-templates" pkg-a-target
   assert_success
   assert_file_exists "$CURDIR/file-a.txt"
   assert_file_exists "$CURDIR/some-dir/file-b.txt"
   run cat "$CURDIR/file-a.txt"
   assert_output "Hello World"
+  run rm -f "$CURDIR/file-a.txt"
+  run rm -f "$CURDIR/some-dir/file-b.txt"
+}
+
+@test "when files are declared, they are not copied to CURDIR when loading local packages" {
+  CURDIR="$FIXTURES/mkpm-load-local-pkg-with-templates"
+  run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURES/mkpm-load-local-pkg-with-templates" pkg-a-target
+  assert_success
+  assert_file_not_exists "$CURDIR/file-c.txt"
   run rm -f "$CURDIR/file-a.txt"
   run rm -f "$CURDIR/some-dir/file-b.txt"
 }

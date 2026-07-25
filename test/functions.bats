@@ -200,5 +200,5 @@ teardown() {
 @test "_mkpm_unpack_files unpacks a pack file" {
   run mkdir -p "$FIXTURES/functions/.mkpkgs/pkg@1.0.0"
   run --keep-empty-lines "${MAKE:-make}" --no-print-directory -C "$FIXTURES/functions" expand-_mkpm_unpack_files a1="pkg@1.0.0"
-  assert_output 'tar -xf pkg@1.0.0.tgz -C .mkpkgs/pkg@1.0.0'
+  assert_output 'f=$(ls -1 pkg@*.tgz 2>/dev/null | head -n1); tar -xf "${f:-pkg@1.0.0.tgz}" -C .mkpkgs/pkg@1.0.0'
 }
